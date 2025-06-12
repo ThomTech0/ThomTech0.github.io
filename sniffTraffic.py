@@ -178,5 +178,5 @@ if __name__=='__main__':
     df = fetch_and_update_csv(owner, repo, token)
     df_ref = fetch_referrers(owner, repo, token)
     page_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    out = f"main.html"
+    out = f"index.html"
     build_dashboard(owner, repo, df, df_ref, page_date, out)

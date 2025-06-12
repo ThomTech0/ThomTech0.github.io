@@ -16,7 +16,8 @@ Ce script utilise l'API GitHub pour obtenir :
 3. Afficher la date de mise à jour du dashboard.
 
 Le dashboard est stylé en CSS épuré, fonds blancs, dégradé violet-rose en fond de page,
-couleurs principales du logo. Section "Données journalières" cliquable.
+couleurs principales du logo. Section "Données journalières" cliquable,
+avec un bouton pour télécharger la CSV directement depuis GitHub.
 
 Prérequis :
 - Python 3.x
@@ -34,7 +35,7 @@ Exemple :
 
 Résultat :
   - `traffic_data.csv` mis à jour : nouvelles dates ajoutées uniquement
-  - `<owner>_<repo>_traffic_dashboard.html` : Dashboard HTML interactif
+  - `index.html` : Dashboard HTML interactif
 """
 import os
 import sys
@@ -52,14 +53,13 @@ IMAGE_URL = (
 )
 BASE_API = "https://api.github.com/repos/{owner}/{repo}"
 CSV_FILE = 'traffic_data.csv'
-
+CSV_RAW_URL = 'https://raw.githubusercontent.com/ThomTech0/ThomTech0.github.io/main/traffic_data.csv'
 
 def request_json(url: str, token: str) -> dict:
     headers = {'Authorization': f'token {token}', 'Accept': 'application/vnd.github.v3+json'}
     resp = requests.get(url, headers=headers)
     resp.raise_for_status()
     return resp.json()
-
 
 def fetch_and_update_csv(owner: str, repo: str, token: str) -> pd.DataFrame:
     clones = request_json(f"{BASE_API.format(owner=owner, repo=repo)}/traffic/clones", token).get('clones', [])
@@ -96,11 +96,9 @@ def fetch_and_update_csv(owner: str, repo: str, token: str) -> pd.DataFrame:
 
     return df_updated
 
-
 def fetch_referrers(owner: str, repo: str, token: str) -> pd.DataFrame:
     data = request_json(f"{BASE_API.format(owner=owner, repo=repo)}/traffic/popular/referrers", token)
     return pd.DataFrame(data)
-
 
 def build_dashboard(owner: str, repo: str, df: pd.DataFrame,
                     df_ref: pd.DataFrame, page_date: str,
@@ -133,6 +131,21 @@ def build_dashboard(owner: str, repo: str, df: pd.DataFrame,
     th, td { padding: 10px; border-bottom: 1px solid #ddd; }
     th { background: #F1F3F8; text-align: left; }
     img.header { display: block; margin: 0 auto 25px; max-width: 300px; }
+
+    /* Styles pour le bouton de téléchargement CSV */
+    .download-btn {
+      display: inline-block;
+      padding: 8px 16px;
+      margin-bottom: 12px;
+      background: #8A90C8;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+    .download-btn:hover {
+      background: #726BAF;
+    }
     '''
 
     tpl = Template(f"""
@@ -143,31 +156,53 @@ def build_dashboard(owner: str, repo: str, df: pd.DataFrame,
   <meta name='viewport' content='width=device-width,initial-scale=1'>
   <title>Dashboard {owner}/{repo}</title>
   <style>{css}</style>
-  <script>function toggle(){{const c=document.getElementById('daily');c.style.display=c.style.display==='block'?'none':'block';}}</script>
+  <script>
+    function toggle() {{
+      const c = document.getElementById('daily');
+      c.style.display = c.style.display === 'block' ? 'none' : 'block';
+    }}
+  </script>
 </head>
 <body>
   <div class='container'>
     <img class='header' src='{IMAGE_URL}' alt='Logo'>
     <h1>Dashboard {owner}/{repo}</h1>
     <p style='text-align:center;color:#666;'>Page mise à jour le : <strong>{page_date}</strong></p>
+
     <div class='section'>{g1}</div>
     <div class='section'>{g2}</div>
-    <div class='section'><div class='toggle' onclick='toggle()'>Données journalières</div>
-      <div id='daily' style='display:none;'>{{{{ df.to_html(index=False, classes='dataframe')|safe }}}}</div></div>
-    <div class='section'><h2>Referrers populaires</h2>{{{{ df_ref.to_html(index=False, classes='dataframe')|safe }}}}</div>
+
+    <div class='section'>
+      <div class='toggle' onclick='toggle()'>Données journalières</div>
+      <div id='daily' style='display:none; padding-top:16px;'>
+        <!-- Bouton de téléchargement CSV -->
+        <p style="text-align:right;">
+          <a
+            class="download-btn"
+            href="{CSV_RAW_URL}"
+            download
+          >Télécharger les données CSV</a>
+        </p>
+        {{{{ df.to_html(index=False, classes='dataframe')|safe }}}}
+      </div>
+    </div>
+
+    <div class='section'>
+      <h2>Referrers populaires</h2>
+      {{{{ df_ref.to_html(index=False, classes='dataframe')|safe }}}}
+    </div>
   </div>
 </body>
 </html>
-"""
-    )
+""")
+
     html = tpl.render(df=df, df_ref=df_ref)
-    with open(output_file,'w',encoding='utf-8') as f:
+    with open(output_file, 'w', encoding='utf-8') as f:
         f.write(html)
     print(f"Dashboard HTML généré : {output_file}")
 
-
-if __name__=='__main__':
-    if len(sys.argv)!=3:
+if __name__ == '__main__':
+    if len(sys.argv) != 3:
         print("Usage: python get_traffic_dashboard.py <owner> <repo>")
         sys.exit(1)
     owner, repo = sys.argv[1], sys.argv[2]
@@ -175,8 +210,9 @@ if __name__=='__main__':
     if not token:
         print("Erreur: définir GITHUB_TOKEN")
         sys.exit(1)
+
     df = fetch_and_update_csv(owner, repo, token)
     df_ref = fetch_referrers(owner, repo, token)
     page_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    out = f"index.html"
+    out = "index.html"
     build_dashboard(owner, repo, df, df_ref, page_date, out)

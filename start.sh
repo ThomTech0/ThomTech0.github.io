@@ -5,7 +5,7 @@
 # Usage: bash deploy\_clone.sh \<repo\_dir> <owner> <repo>
 
 echo "🔄 Exécution du script snifftraffic.py..."
-python snifftraffic.py merce-fra PELCA
+python3 snifftraffic.py merce-fra PELCA
 
 # Ajout au staging
 git add .
